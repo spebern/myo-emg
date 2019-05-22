@@ -1,7 +1,5 @@
-from myo_raw import MyoRaw
 import numpy as np
 import random
-from scipy.signal import butter, filtfilt, iirnotch
 from enum import Enum
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from myo_emg_recorder import MyoEMGRecorder
