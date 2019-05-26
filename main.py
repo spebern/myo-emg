@@ -36,31 +36,49 @@ def gen_labels(trials, label_types):
     return labels_with_relaxation
 
 
+def train_and_save_classifier(clf_name, features, labels):
+    clf = LinearDiscriminantAnalysis()
+    clf.fit(features, labels)
+
+    with open("trained_classifiers/{}".format(clf_name), "wb") as fid:
+        pickle.dump(clf, fid)
+
+
 class App(object):
     def __init__(self):
-        recorder = MyoEMGRecorder()
         preprocessor = MyoEMGPreprocessor()
-
-        self._recorder = recorder
         self._preprocessor = preprocessor
+        self._recorder = None
+
+    def _init_recorder(self):
+        recorder = MyoEMGRecorder()
+        recorder.start_recording()
+        self._recorder = recorder
 
     def __del__(self):
-        self._recorder.stop()
+        if self._recorder is not None:
+            self._recorder.stop()
 
     def train(self):
         npzfile = np.load("training_data/data.npz")
 
-        clf = LinearDiscriminantAnalysis()
-        clf.fit(npzfile["features"], npzfile["labels"])
+        labels = npzfile["labels"]
+        features = npzfile["features"]
 
-        with open("trained_classifiers/clf.pkl", "wb") as fid:
-            pickle.dump(clf, fid)
+        # train relaxation detector
+        relaxation_labels = (labels < 1).astype(int)
+        # train gesture detector
+        gesture_indexes = np.argwhere(labels > 0).flatten()
+        gesture_features = features[gesture_indexes]
+        gesture_labels = labels[gesture_indexes]
+
+        train_and_save_classifier("relaxation_clf.pkl", features, relaxation_labels)
+        train_and_save_classifier("gesture_clf.pkl", gesture_features, gesture_labels)
 
     def record(self, trials=10):
+        self._init_recorder()
         preprocessor = self._preprocessor
         recorder = self._recorder
-
-        recorder.start_recording()
 
         labels = gen_labels(trials, list(HandGesture))
         features = np.zeros(
@@ -77,15 +95,24 @@ class App(object):
         np.savez("training_data/data.npz", features=features, labels=labels)
 
     def evaluate(self, trials=10):
-        self._recorder.start_recording()
+        self._init_recorder()
 
-        with open("trained_classifiers/clf.pkl", "rb") as fid:
-            clf = pickle.load(fid)
+        with open("trained_classifiers/relaxation_clf.pkl", "rb") as fid:
+            relaxation_clf = pickle.load(fid)
+
+        with open("trained_classifiers/gesture_clf.pkl", "rb") as fid:
+            gesture_clf = pickle.load(fid)
+
         for _ in range(trials):
             signals = self._recorder.get()
             features = self._preprocessor.extract_features(signals)
-            label = clf.predict([features])[0]
-            print(HandGesture(label))
+
+            label = relaxation_clf.predict([features])[0]
+            if label == HandGesture.RELAX:
+                print(HandGesture(label))
+            else:
+                label = gesture_clf.predict([features])[0]
+                print(HandGesture(label))
 
 
 def main():
