@@ -65,7 +65,8 @@ class MyoEMGPreprocessor:
     def extract_features(self, signals):
         features = np.zeros(self.num_channels * self.num_features * 2)
 
-        self._filter(signals)
+        # myo is already doing filtering so this step might not be necessary
+        # self._filter(signals)
         for i in range(self.num_channels):
             wl_features, mav_features = self._extract_features_from_channel(
                 signals[:, i]
